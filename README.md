@@ -4,7 +4,7 @@
 
 Aktualne wydanie znajduje się w `dist/Floteka`. Wyniki budowania EXE/XLSM/ZIP
 są pomijane przez Git; repozytorium przechowuje źródła i narzędzia budowy.
-Starsze lokalne dostawy zachowano w `local-archive`, poza drzewem źródeł,
+Starsze lokalne dostawy zachowano w `local-archive`, poza drzewem źródeł.
 
 Kolory całych wierszy zależą od **daty rozładunku**: przed dzisiaj — czerwony,
 dziś lub jutro — pomarańczowy; późniejsze i puste daty mają zwykłe tło.
