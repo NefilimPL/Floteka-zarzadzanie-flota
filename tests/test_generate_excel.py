@@ -15,7 +15,10 @@ NAMES = ('Floteka.xlsm', 'Floteka-DEMO.xlsm')
 
 
 @pytest.fixture
-def source(tmp_path):
+def source(tmp_path, monkeypatch):
+    # These cases simulate a local source ZIP, including subprocess generation.
+    # Do not inherit the host runner's requirement for a verified Git commit.
+    monkeypatch.delenv('GITHUB_ACTIONS', raising=False)
     root = tmp_path / 'sources with spaces'
     shutil.copytree(ROOT / 'excel', root / 'excel')
     shutil.copytree(ROOT / 'fleet', root / 'fleet',
@@ -120,3 +123,13 @@ generate(Path(sys.argv[1]), 'V2.3.4.5', root=Path(sys.argv[2]))
                             cwd=ROOT, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert all((output / name).exists() for name in NAMES)
+
+
+def test_ci_generation_requires_a_verified_source_commit(source, tmp_path, monkeypatch):
+    from tools.generate_excel import generate
+    monkeypatch.setenv('GITHUB_ACTIONS', 'true')
+    output = tmp_path / 'unverified CI build'
+    with pytest.raises(ValueError, match='verified source commit'):
+        generate(output, 'V2.3.4.5', root=source)
+    assert not output.exists()
+    assert not (source / 'fleet' / '_build_version.py').exists()
