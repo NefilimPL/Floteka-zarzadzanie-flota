@@ -4,12 +4,17 @@ from contextlib import contextmanager
 from pathlib import Path
 import argparse
 import json
+import os
+import subprocess
+import sys
 import winreg
 
 import pythoncom
 import win32com.client
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from tools.release_version import prepare_version
 OUT = ROOT / 'dist' / 'Floteka'
 NAVY = 0x4F3A17  # Excel używa BGR
 TEAL = 0x807D14
@@ -154,11 +159,12 @@ def setup_optional_fields(sheet):
     head.RowHeight = 38
 
 
-def build(output=None):
+def build(output=None, tag=None):
     global OUT
     if output is not None:
         OUT = Path(output).resolve()
     OUT.mkdir(parents=True, exist_ok=True)
+    release = prepare_version(ROOT, tag)
     with vba_access():
         app = win32com.client.DispatchEx('Excel.Application')
         book = None
@@ -167,13 +173,15 @@ def build(output=None):
             app.DisplayAlerts = False
             app.EnableEvents = False
             book = app.Workbooks.Add()
+            book.CustomDocumentProperties.Add('FlotekaVersion', False, 4, release.version)
+            book.BuiltinDocumentProperties('Title').Value = f'Floteka {release.version}'
             while book.Worksheets.Count > 1:
                 book.Worksheets(book.Worksheets.Count).Delete()
             book.Worksheets(1).Name = 'START'
             for name in ('DANE', 'ARCHIWUM', 'KIEROWCY', 'TIRY', 'PRZYCZEPY', '_STAN'):
                 book.Worksheets.Add(pythoncom.Missing, book.Worksheets(book.Worksheets.Count)).Name = name
             start = book.Worksheets('START')
-            setup_sheet(start, 'FLOTEKA', 'Kierowcy • TIR-y • przyczepy | cztery miejsca i pełna historia',
+            setup_sheet(start, 'FLOTEKA', f'Wersja {release.version} | Kierowcy • TIR-y • przyczepy | cztery miejsca i pełna historia',
                         ['Szybki start', '', '', '', '', ''], [30, 26, 26, 26, 26, 26])
             start.Range('A5:F5').Merge()
             help_rows = [
@@ -239,6 +247,8 @@ def build(output=None):
                 button(sheet, '+ Dodaj pojazd', action, 8, width=180)
             for sheet in (data, archive, reg, book.Worksheets('TIRY')):
                 setup_optional_fields(sheet)
+            for sheet in book.Worksheets:
+                sheet.PageSetup.LeftFooter = f'Floteka {release.version}'
             book.Names.Add(Name='ListaTirow', RefersTo="='TIRY'!$A$6:$A$6")
             book.Names.Add(Name='ListaPrzyczep', RefersTo="='PRZYCZEPY'!$A$6:$A$6")
             reg.Range('C6:C5005').Validation.Add(3, 2, 1, '=ListaTirow')
@@ -291,6 +301,8 @@ End Function''')
             book.SaveAs(str(OUT / 'Floteka-DEMO.xlsm'), FileFormat=52)
             print('XLSM demo: OK', flush=True)
             (ROOT / 'docs' / 'excel-build.json').write_text(json.dumps({'ok': True, 'excel': app.Version,
+                'version': release.version, 'tag': release.tag,
+                'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
                 'macro_lines': module.CodeModule.CountOfLines, 'files': [clean.name, 'Floteka-DEMO.xlsm'],
                 'AccessVBOM': 'przywracany w finally'}, ensure_ascii=False, indent=2), encoding='utf-8')
         finally:
@@ -303,4 +315,6 @@ End Function''')
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', type=Path)
-    build(parser.parse_args().output)
+    parser.add_argument('--tag', default=os.environ.get('FLOTEKA_BUILD_TAG') or None)
+    args = parser.parse_args()
+    build(args.output, args.tag)

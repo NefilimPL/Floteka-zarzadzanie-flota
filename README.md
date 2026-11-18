@@ -47,17 +47,58 @@ Jeżeli uzupełniono telefon lub dane tirów, eksport bieżących danych dodaje
 odpowiednio arkusze KIEROWCY i TIRY. Eksport pojedynczego kierowcy ogranicza
 rejestry do jego danych, a eksport wszystkich obejmuje także tiry bez przypisania.
 
-## Automatyczna budowa EXE w GitHub Actions
+## GitHub Release i wersja z tagu
 
 Workflow `.github/workflows/build-exe.yml` nazywa się **Floteka - Windows EXE**.
 Uruchamia się po zmianach kodu na `main`, dla pull requestów do `main`,
-dla tagów `v*` oraz ręcznie przez **Actions → Floteka - Windows EXE → Run workflow**.
+dla tagów `v*` i `V*` oraz ręcznie przez **Actions → Floteka - Windows EXE → Run workflow**.
 Po ukończeniu wybierz na stronie uruchomienia artefakt **Floteka-Windows-x64**.
 
 Workflow instaluje Python 3.13 x64, uruchamia testy SQLite/eksportu/GUI/nazwy,
 buduje `Floteka.exe` i wykonuje test już spakowanego programu. Artefakt zawiera
 EXE, instrukcję, sumę SHA-256 i raporty. Nie zawiera baz ani skoroszytów
-użytkownika. Nie wymaga własnych sekretów ani zainstalowanego Excela.
+użytkownika. Budowa EXE nie wymaga własnych sekretów ani zainstalowanego Excela.
+
+Wypchnięcie poprawnego tagu uruchamia także budowę XLSM i publikację
+**GitHub Release** z `Floteka.exe`, `Floteka.xlsm`, `Floteka-DEMO.xlsm`,
+instrukcją, sumami SHA-256 i raportami. Wydanie jest publikowane dopiero po
+pomyślnych testach EXE oraz układu, wersji i makr XLSM.
+
+| Tag | Wersja w plikach | Kod źródłowy | GitHub Release |
+| --- | --- | --- | --- |
+| `V1.0.0.0` lub `v1.0.0.0` | `1.0.0.0` | Commit wskazany przez tag | Zwykłe wydanie |
+| `v1.0.0.0-dev` | `1.0.0.0-dev` | Gałąź `dev` pobrana przy rozpoczęciu budowy | Prerelease, bez oznaczenia Latest |
+
+EXE i XLSM zawsze używają tego samego commitu. Jego SHA jest zapisane w
+`build-info.json`, `excel-build.json` i opisie Release. Tag `-dev` nie uruchomi
+budowy z innej gałęzi, jeśli `dev` nie istnieje. Zmiana workflow i narzędzi
+budowy musi być dostępna również na `dev` przed pierwszym wydaniem testowym.
+Warto tworzyć tag testowy na gałęzi `dev`, aby archiwum źródeł generowane przez
+GitHub również wskazywało tę gałąź; faktyczny commit binariów podają raporty.
+
+Numer składa się z czterech liczb od 0 do 65535, bez zer wiodących,
+z opcjonalnym sufiksem `-dev`. Błędny tag zatrzymuje budowę.
+Wersja jest osadzana w tytule aplikacji, `--version`, zasobach Windows EXE,
+arkuszu START skoroszytów XLSM oraz właściwościach i stopkach plików Excela.
+Eksporty XLSX aplikacji otrzymują wersję programu, który je utworzył.
+Budowa bez tagu korzysta z domyślnej wersji zapisanej w `fleet/branding.py`.
+
+### Runner wymagany do budowy XLSM
+
+Zadanie `excel` wymaga własnego runnera GitHub Actions z etykietami
+`self-hosted`, `Windows`, `X64`, `excel`. Na tym komputerze zainstaluj
+desktopowy Excel i PowerShell 7 (`pwsh`). Uruchom aktualnego runnera
+w zalogowanej sesji użytkownika, który może uruchamiać Excel, zamiast jako
+usługę bez pulpitu. Workflow instaluje Python i biblioteki, tworzy nowe, puste
+skoroszyty oraz DEMO i testuje makra na kopiach. Nie używa danych użytkownika.
+Bez tego runnera zadanie XLSM oczekuje w kolejce, a Release nie zostaje opublikowany.
+Dodanie runnera: **Settings → Actions → Runners → New self-hosted runner**;
+podczas konfiguracji dodaj etykietę `excel`.
+
+Publikacja korzysta z `GITHUB_TOKEN` i uprawnienia `contents: write` wyłącznie
+w zadaniu `release`. Pull requesty i zwykłe zmiany gałęzi nie uruchamiają
+runnera Excel ani publikacji. Ponowne uruchomienie może dokończyć szkic Release;
+już opublikowane pliki nie są automatycznie zastępowane.
 
 Plik workflow musi najpierw trafić do repozytorium na GitHub. Aby zobaczyć
 przycisk ręcznego uruchomienia, umieść go na domyślnej gałęzi `main`.
@@ -69,9 +110,17 @@ python -m pip install -r requirements-build.txt
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/build_exe.ps1
 ```
 
-Wynik: `dist/Floteka/Floteka.exe`. Pełny pakiet z XLSM wymaga lokalnego Excela
-i pywin32 oraz skryptu `tools/build_release.ps1`. GitHub Actions buduje aplikację
-SQLite; testy VBA i budowa skoroszytu pozostają częścią lokalnego procesu.
+Wynik: `dist/Floteka/Floteka.exe`. Lokalny pełny pakiet z XLSM wymaga Excela
+i pywin32 oraz skryptu `tools/build_release.ps1`. Wersję można podać jawnie:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/build_exe.ps1 -Tag v1.0.0.0-dev
+python tools/build_excel.py --tag v1.0.0.0-dev
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/build_release.ps1 -Tag V1.0.0.0
+```
+
+Lokalny parametr `-Tag` / `--tag` ustawia wersję aktualnego checkoutu;
+wybór gałęzi `dev` odbywa się w GitHub Actions.
 
 Domyślna baza znajduje się w `%LOCALAPPDATA%\Floteka\flota.sqlite3`.
 Przy pierwszym uruchomieniu nowej wersji istniejąca baza ze starego folderu
@@ -249,7 +298,8 @@ python main.py
 ```
 
 `Uruchom.bat` uruchamia tę samą wersję ze źródeł. Można użyć argumentu `--db`.
-Testy: `python -m pytest -q` (wymaga pytest i dostępu do pulpitu dla testów Tk).
+Testy: `python -m pytest tests --capture=sys -q` (narzędzia z `requirements-build.txt`
+i dostęp do pulpitu dla testów Tk; `--capture=sys` omija konflikt uchwytów Tcl/Tk na Windows).
 Test układu domyślnie sprawdza `dist/Floteka/Floteka.xlsm`, jeśli istnieje,
 a dla starszych dostaw `dist/poprawione/Flota-Adriana.xlsm` lub
 `dist/Flota-Adriana.xlsm`. Własny plik można wskazać zmienną

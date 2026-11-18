@@ -8,6 +8,7 @@ from xml.etree import ElementTree as ET
 import pytest
 from openpyxl import load_workbook
 from tools.excel_paths import default_excel_file
+from fleet.branding import VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
 FILE = default_excel_file()
@@ -17,6 +18,17 @@ NS = {'s': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main',
       'p': 'http://schemas.openxmlformats.org/package/2006/relationships',
       'd': 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing'}
 HEADERS = ['Kierowca', 'TIR — rejestracja', 'Przyczepa — rejestracja', 'Informacje dodatkowe', 'Data załadunku', 'Data rozładunku', 'Status', 'Wyczyść']
+
+
+def test_workbook_contains_the_application_version():
+    for path in (FILE, FILE.with_name('Floteka-DEMO.xlsm')):
+        wb = load_workbook(path, keep_vba=True)
+        try:
+            assert wb.custom_doc_props['FlotekaVersion'].value == VERSION
+            assert f'Wersja {VERSION}' in wb['START']['A2'].value
+            assert wb['DANE'].oddFooter.left.text == f'Floteka {VERSION}'
+        finally:
+            wb.close()
 
 
 def test_all_headers_are_in_the_correct_columns():

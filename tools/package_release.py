@@ -33,7 +33,7 @@ def package(output=None):
         files.append(ROOT / 'docs' / 'ci-local-check.json')
     if (ROOT / 'docs' / 'gui-layout.json').exists():
         files.append(ROOT / 'docs' / 'gui-layout.json')
-    files += [ROOT / 'tools' / name for name in ['build_excel.py', 'build_exe.ps1', 'windows-version.txt', 'excel_paths.py', 'build_release.ps1', 'test_excel.py', 'test_excel_regressions.py', 'test_deadlines_excel.py', 'test_optional_excel.py', 'test_export_excel.py', 'make_demo.py', 'package_release.py', 'check_excel_filters_speed.py', 'repair_excel_copy.py', 'capture_preview.py']]
+    files += [ROOT / 'tools' / name for name in ['build_excel.py', 'build_exe.ps1', 'release_version.py', 'excel_paths.py', 'build_release.ps1', 'test_excel.py', 'test_excel_regressions.py', 'test_deadlines_excel.py', 'test_optional_excel.py', 'test_export_excel.py', 'make_demo.py', 'package_release.py', 'check_excel_filters_speed.py', 'repair_excel_copy.py', 'capture_preview.py']]
     for folder in folders:
         files += [p for p in (ROOT / folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts]
     with zipfile.ZipFile(OUT / 'Zrodla.zip', 'w', zipfile.ZIP_DEFLATED) as archive:

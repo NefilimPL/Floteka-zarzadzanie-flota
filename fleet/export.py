@@ -6,11 +6,13 @@ from datetime import date
 from pathlib import Path
 
 from openpyxl import Workbook
+from openpyxl.packaging.custom import StringProperty
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 from .deadlines import OVERDUE_FILL, SOON_FILL
+from .branding import APP_NAME, VERSION
 
 
 HEADERS = ['Kierowca', 'TIR — rejestracja', 'Przyczepa — rejestracja', 'Informacje dodatkowe', 'Data załadunku', 'Data rozładunku']
@@ -95,6 +97,9 @@ def export_xlsx(store, path, scope='both', driver_id=None):
     if path == store.path or path.suffix.lower() != '.xlsx':
         raise ValueError('Wybierz plik z rozszerzeniem .xlsx, inny niż baza danych.')
     wb = Workbook()
+    wb.properties.version = VERSION
+    wb.properties.creator = APP_NAME
+    wb.custom_doc_props.append(StringProperty(name='FlotekaVersion', value=VERSION))
     wb.remove(wb.active)
     if scope in ('both', 'current'):
         drivers = [store.driver(driver_id)] if driver_id is not None else store.drivers()
@@ -114,6 +119,8 @@ def export_xlsx(store, path, scope='both', driver_id=None):
             write_optional_register(wb.create_sheet('TIRY'), ['TIR', 'Przebieg km', 'Przegląd', 'Ubezpieczenie', 'Serwis', 'Uwagi'],
                 [(item['plate'], item['odometer_km'], *(date.fromisoformat(item[key]) if item[key] else None
                   for key in ('inspection_date', 'insurance_date', 'service_date')), item['notes']) for item in trucks])
+    for sheet in wb:
+        sheet.oddFooter.left.text = f'{APP_NAME} {VERSION}'
     path.parent.mkdir(parents=True, exist_ok=True)
     handle, temporary = tempfile.mkstemp(dir=path.parent, suffix='.xlsx')
     os.close(handle)

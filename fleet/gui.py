@@ -10,7 +10,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from .export import export_xlsx
 from .store import DraftConfirmationRequired
-from .branding import APP_NAME
+from .branding import APP_NAME, VERSION
 from .deadlines import deadline_tag, OVERDUE_FILL, SOON_FILL
 from .theme import apply_theme
 
@@ -41,7 +41,7 @@ class FleetApp:
         self.optional_visible = tk.BooleanVar(value=False)
         self.editor_visible = False
         self.truck_summary = tk.StringVar()
-        root.title(f'{APP_NAME} • kierowcy, tiry i przyczepy')
+        root.title(f'{APP_NAME} {VERSION} • kierowcy, tiry i przyczepy')
         root.geometry(f'{min(1280, max(1040, root.winfo_screenwidth() - 60))}x{min(800, max(600, root.winfo_screenheight() - 100))}')
         root.minsize(1040, 600)
         self._styles()
