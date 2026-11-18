@@ -5,6 +5,7 @@ import pytest
 
 from fleet.gui import FleetApp
 from fleet.store import Store
+from fleet.branding import VERSION
 
 
 @pytest.fixture
@@ -24,6 +25,7 @@ def app(tmp_path):
 def test_save_editor_updates_real_database_and_history_tree(app):
     gui, store, driver = app
     assert gui.root.title().startswith('Floteka')
+    assert VERSION in gui.root.title()
     gui.select_slot(2)
     for key, value in dict(trailer='PO200', info='Firma', load_date='17.11.2026', unload_date='19.11.2026').items():
         gui.fields[key].set(value)

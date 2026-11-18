@@ -5,6 +5,7 @@ build/
 /releases/
 /local-archive/
 *.spec
+/fleet/_build_version.py
 *.exe
 *.msi
 *.msix

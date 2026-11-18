@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ['v*', 'V*']
     paths:
       - 'fleet/**'
       - 'main.py'
       - 'requirements*.txt'
-      - 'tools/build_exe.ps1'
-      - 'tools/windows-version.txt'
+      - 'tools/**'
+      - 'excel/**'
       - 'tests/**'
       - 'README.md'
       - '.github/workflows/build-exe.yml'
@@ -20,8 +20,8 @@ on:
       - 'fleet/**'
       - 'main.py'
       - 'requirements*.txt'
-      - 'tools/build_exe.ps1'
-      - 'tools/windows-version.txt'
+      - 'tools/**'
+      - 'excel/**'
       - 'tests/**'
       - 'README.md'
       - '.github/workflows/build-exe.yml'
@@ -38,17 +38,31 @@ jobs:
     name: Testy, budowa i sprawdzenie EXE
     runs-on: windows-2025
     timeout-minutes: 20
+    outputs:
+      source_sha: ${{ steps.source.outputs.sha }}
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
     defaults:
       run:
         shell: pwsh
     env:
       PYTHONUTF8: '1'
       PYTHONIOENCODING: utf-8
+      FLOTEKA_BUILD_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
     steps:
       - name: Pobierz kod
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+          # Resolve dev once; the Excel job uses this checkout's exact SHA.
+          ref: ${{ startsWith(github.ref, 'refs/tags/') && endsWith(github.ref_name, '-dev') && 'refs/heads/dev' || github.sha }}
+
+      - name: Zapisz commit zrodlowy
+        id: source
+        run: |
+          $flotekaSource = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve source commit.' }
+          "sha=$flotekaSource" >> $env:GITHUB_OUTPUT
 
       - name: Python 3.13 x64
         uses: actions/setup-python@v7
@@ -60,6 +74,10 @@ jobs:
             requirements.txt
             requirements-build.txt
 
+      - name: Przygotuj wersje z tagu
+        id: version
+        run: python -m tools.release_version --github-output $env:GITHUB_OUTPUT
+
       - name: Zainstaluj zaleznosci
         run: |
           python -m pip install --upgrade pip
@@ -69,7 +87,9 @@ jobs:
 
       - name: Testy aplikacji SQLite i GUI
         run: |
-          python -m pytest tests --ignore=tests/test_excel_layout.py -q -p no:cacheprovider --junitxml=build/test-results.xml
+          # Windows Tcl/Tk can lose cached standard handles with pytest's fd capture.
+          # Keep Python output capture without redirecting the native handles.
+          python -m pytest tests --ignore=tests/test_excel_layout.py --capture=sys -q -p no:cacheprovider --junitxml=build/test-results.xml
           if ($LASTEXITCODE -ne 0) { throw 'Application tests failed.' }
 
       - name: Zbuduj i uruchom gotowy EXE
@@ -99,3 +119,146 @@ jobs:
             build/pyinstaller/Floteka/warn-Floteka.txt
           if-no-files-found: ignore
           retention-days: 14
+
+  excel:
+    name: Zbuduj i sprawdz XLSM w Excelu
+    needs: windows-exe
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: [self-hosted, Windows, X64, excel]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: utf-8
+      FLOTEKA_BUILD_TAG: ${{ github.ref_name }}
+      FLOTA_EXCEL_FILE: ${{ github.workspace }}\dist\actions-excel\Floteka.xlsm
+      FLOTEKA_EXCEL_VERSION_DIR: ${{ github.workspace }}\dist\actions-excel
+    steps:
+      - name: Pobierz ten sam commit co EXE
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.windows-exe.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Python 3.13 x64
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          architecture: x64
+
+      - name: Zainstaluj narzedzia budowy Excela
+        run: |
+          python -m pip install -r requirements-build.txt pywin32
+          if ($LASTEXITCODE -ne 0) { throw 'Excel dependency installation failed.' }
+
+      - name: Zbuduj XLSM i DEMO z wersja tagu
+        run: |
+          python tools/build_excel.py --output dist/actions-excel
+          if ($LASTEXITCODE -ne 0) { throw 'XLSM build failed.' }
+          Copy-Item -LiteralPath docs/excel-build.json -Destination dist/actions-excel/excel-build.json
+
+      - name: Sprawdz wersje, uklad i makra w Excelu
+        run: |
+          python -m pytest tests/test_excel_layout.py tests/test_excel_version.py --capture=sys -q -p no:cacheprovider --junitxml=build/excel-test-results.xml
+          if ($LASTEXITCODE -ne 0) { throw 'XLSM layout/version tests failed.' }
+          foreach ($flotekaTest in @('tools/test_excel.py', 'tools/test_excel_regressions.py', 'tools/test_deadlines_excel.py', 'tools/test_optional_excel.py')) {
+            python $flotekaTest
+            if ($LASTEXITCODE -ne 0) { throw "Excel integration test failed: $flotekaTest" }
+          }
+
+      - name: Udostepnij sprawdzone skoroszyty
+        uses: actions/upload-artifact@v7
+        with:
+          name: Floteka-Excel
+          path: |
+            dist/actions-excel/Floteka.xlsm
+            dist/actions-excel/Floteka-DEMO.xlsm
+            dist/actions-excel/excel-build.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Zachowaj raporty Excela
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: Floteka-raporty-Excel
+          path: |
+            build/excel-test-results.xml
+            docs/excel-*.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  release:
+    name: Opublikuj GitHub Release z EXE i XLSM
+    needs: [windows-exe, excel]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: windows-2025
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Pobierz EXE
+        uses: actions/download-artifact@v8
+        with:
+          name: Floteka-Windows-x64
+          path: dist/release
+
+      - name: Pobierz XLSM
+        uses: actions/download-artifact@v8
+        with:
+          name: Floteka-Excel
+          path: dist/release
+
+      - name: Utworz wydanie z wersja tagu
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          FLOTEKA_TAG: ${{ github.ref_name }}
+          FLOTEKA_VERSION: ${{ needs.windows-exe.outputs.version }}
+          FLOTEKA_PRERELEASE: ${{ needs.windows-exe.outputs.prerelease }}
+          FLOTEKA_SOURCE: ${{ needs.windows-exe.outputs.source_sha }}
+        run: |
+          $flotekaBuild = Get-Content dist/release/build-info.json -Raw | ConvertFrom-Json
+          $flotekaExcel = Get-Content dist/release/excel-build.json -Raw | ConvertFrom-Json
+          foreach ($flotekaReport in @($flotekaBuild, $flotekaExcel)) {
+            if ($flotekaReport.version -ne $env:FLOTEKA_VERSION -or $flotekaReport.tag -ne $env:FLOTEKA_TAG -or $flotekaReport.commit -ne $env:FLOTEKA_SOURCE) {
+              throw 'EXE and XLSM must match the requested tag, version and source commit.'
+            }
+          }
+          if ($env:FLOTEKA_PRERELEASE -ne 'true') {
+            $flotekaTagCommit = gh api "repos/$env:GH_REPO/commits/$env:FLOTEKA_TAG" --jq .sha
+            if ($LASTEXITCODE -ne 0 -or $flotekaTagCommit -ne $env:FLOTEKA_SOURCE) { throw 'The stable tag no longer points to the built source commit.' }
+          }
+          $flotekaAssets = @('Floteka.exe', 'Floteka.xlsm', 'Floteka-DEMO.xlsm', 'INSTRUKCJA.md', 'exe-test.json', 'build-info.json', 'excel-build.json') | ForEach-Object { Join-Path 'dist/release' $_ }
+          $flotekaSums = foreach ($flotekaAsset in $flotekaAssets) {
+            $flotekaHash = (Get-FileHash -LiteralPath $flotekaAsset -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$flotekaHash  $(Split-Path -Leaf $flotekaAsset)"
+          }
+          $flotekaSums | Set-Content dist/release/SUMY-SHA256.txt -Encoding utf8
+          $flotekaAssets += 'dist/release/SUMY-SHA256.txt'
+          $flotekaChannel = if ($env:FLOTEKA_PRERELEASE -eq 'true') { 'dev' } else { 'tag' }
+          @("Floteka $env:FLOTEKA_VERSION", '', "Tag: $env:FLOTEKA_TAG", "Kod: $flotekaChannel", "Commit EXE i XLSM: $env:FLOTEKA_SOURCE", '', 'Pliki EXE i XLSM maja wspolna wersje. Narzedzia dzialaja niezaleznie.') | Set-Content dist/release/RELEASE.md -Encoding utf8
+          # Stage assets as a draft; only publish after every upload succeeds.
+          $flotekaExisting = gh release view $env:FLOTEKA_TAG --json isDraft,assets 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            $flotekaDraft = $flotekaExisting | ConvertFrom-Json
+            if (-not $flotekaDraft.isDraft) { throw 'This Release is already published; its files will not be replaced.' }
+            $flotekaAllowedNames = @($flotekaAssets | ForEach-Object { Split-Path -Leaf $_ })
+            foreach ($flotekaExistingAsset in $flotekaDraft.assets) {
+              if ($flotekaExistingAsset.name -notin $flotekaAllowedNames) { throw 'The existing draft contains additional files; it will not be published automatically.' }
+            }
+            gh release upload $env:FLOTEKA_TAG @flotekaAssets --clobber
+          } else {
+            $flotekaOptions = @('--verify-tag', '--draft', '--title', "Floteka $env:FLOTEKA_VERSION", '--notes-file', 'dist/release/RELEASE.md')
+            if ($env:FLOTEKA_PRERELEASE -eq 'true') { $flotekaOptions += '--prerelease' }
+            gh release create $env:FLOTEKA_TAG @flotekaAssets @flotekaOptions
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed.' }
+          $flotekaPublish = @('--draft=false', "--prerelease=$env:FLOTEKA_PRERELEASE", '--title', "Floteka $env:FLOTEKA_VERSION", '--notes-file', 'dist/release/RELEASE.md')
+          if ($env:FLOTEKA_PRERELEASE -eq 'true') { $flotekaPublish += '--latest=false' }
+          gh release edit $env:FLOTEKA_TAG @flotekaPublish
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }

@@ -1,4 +1,7 @@
-param([string]$OutputDirectory = 'dist/Floteka')
+param(
+    [string]$OutputDirectory = 'dist/Floteka',
+    [string]$Tag = $env:FLOTEKA_BUILD_TAG
+)
 
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath (Split-Path -Parent $PSScriptRoot)
@@ -6,7 +9,12 @@ $flotekaOutput = if ([IO.Path]::IsPathRooted($OutputDirectory)) { $OutputDirecto
 $flotekaOutput = [IO.Path]::GetFullPath($flotekaOutput)
 New-Item -ItemType Directory -Path $flotekaOutput -Force | Out-Null
 
-python -m PyInstaller --noconfirm --clean --windowed --onefile --name Floteka --version-file tools/windows-version.txt --distpath $flotekaOutput --workpath build/pyinstaller main.py
+$flotekaVersionArgs = @()
+if ($Tag) { $flotekaVersionArgs = @('--tag', $Tag) }
+python -m tools.release_version @flotekaVersionArgs
+if ($LASTEXITCODE -ne 0) { throw 'Version preparation failed.' }
+$flotekaVersion = Get-Content -LiteralPath 'build/version.json' -Raw -Encoding UTF8 | ConvertFrom-Json
+python -m PyInstaller --noconfirm --clean --windowed --onefile --name Floteka --version-file build/windows-version.txt --distpath $flotekaOutput --workpath build/pyinstaller main.py
 if ($LASTEXITCODE -ne 0) { throw 'PyInstaller build failed.' }
 
 $flotekaExe = Join-Path $flotekaOutput 'Floteka.exe'
@@ -25,7 +33,7 @@ $flotekaProcess.Refresh()
 if ($flotekaProcess.ExitCode -ne 0) { throw "EXE self-test failed: $($flotekaProcess.ExitCode)" }
 if (-not (Test-Path -LiteralPath $flotekaReport)) { throw 'EXE did not produce a fresh test report.' }
 $flotekaResult = Get-Content -LiteralPath $flotekaReport -Raw -Encoding UTF8 | ConvertFrom-Json
-if (-not $flotekaResult.ok -or -not $flotekaResult.frozen -or $flotekaResult.app -ne 'Floteka') {
+if (-not $flotekaResult.ok -or -not $flotekaResult.frozen -or $flotekaResult.app -ne 'Floteka' -or $flotekaResult.version -ne $flotekaVersion.version) {
     throw 'EXE report does not confirm a working, packaged Floteka application.'
 }
 Copy-Item -LiteralPath $flotekaReport -Destination (Join-Path $flotekaOutput 'exe-test.json') -Force
@@ -35,7 +43,10 @@ Set-Content -LiteralPath (Join-Path $flotekaOutput 'SUMY-SHA256.txt') -Value ($f
 $flotekaBuild = [ordered]@{
     app = 'Floteka'
     version = $flotekaResult.version
-    commit = $env:GITHUB_SHA
+    tag = $flotekaVersion.tag
+    source_ref = $flotekaVersion.source_ref
+    commit = $flotekaVersion.commit
+    event_commit = $env:GITHUB_SHA
     run_id = $env:GITHUB_RUN_ID
     sha256 = $flotekaHash
     self_test = $true

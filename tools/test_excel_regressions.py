@@ -24,7 +24,7 @@ def acknowledge_test_dialog(app):
     def worker():
         while not stop.wait(0.05):
             def visit(hwnd, _):
-                if win32process.GetWindowThreadProcessId(hwnd)[1] == pid and win32gui.GetClassName(hwnd) == '#32770' and win32gui.GetWindowText(hwnd) in ('Floteka', 'Flota Adriana'):
+                if win32process.GetWindowThreadProcessId(hwnd)[1] == pid and win32gui.GetClassName(hwnd) == '#32770' and win32gui.GetWindowText(hwnd) == 'Floteka':
                     seen.append(hwnd)
                     def click_ok(child, __):
                         if win32gui.GetWindowText(child) == 'OK':
