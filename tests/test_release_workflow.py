@@ -41,16 +41,34 @@ function global:gh {
     $flotekaCall = @($args)
     ConvertTo-Json -InputObject $flotekaCall -Compress | Add-Content calls.jsonl
     $global:LASTEXITCODE = 0
-    if ($args[0] -eq 'api') {
+    if ($args[0] -eq 'api' -and $args[1] -like '*/commits/*') {
         if ($env:TEST_SCENARIO -eq 'moved-tag') { 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' }
         else { $env:FLOTEKA_SOURCE }
-    } elseif ($args[1] -eq 'view') {
+    } elseif (($args[0] -eq 'api' -and $args[1] -like '*/releases/tags/*') -or $args[1] -eq 'view') {
+        # The tag REST endpoint finds published releases only. gh release view
+        # additionally resolves draft releases by their pending tag through GraphQL.
+        if ($args[0] -eq 'api' -and $env:TEST_SCENARIO -in @('draft', 'extra-asset')) {
+            $global:LASTEXITCODE = 1
+            return
+        }
         switch ($env:TEST_SCENARIO) {
             'new' { $global:LASTEXITCODE = 1 }
             'moved-tag' { $global:LASTEXITCODE = 1 }
-            'draft' { '{"isDraft":true,"assets":[{"name":"Floteka.exe"}]}' }
-            'extra-asset' { '{"isDraft":true,"assets":[{"name":"private.sqlite3"}]}' }
-            'published' { '{"isDraft":false,"assets":[]}' }
+            'draft' { '{"isDraft":true,"draft":true,"assets":[{"name":"Floteka.exe"}]}' }
+            'extra-asset' { '{"isDraft":true,"draft":true,"assets":[{"name":"private.sqlite3"}]}' }
+            'published' { '{"isDraft":false,"draft":false,"assets":[{"name":"Floteka.exe","digest":"sha256:wrong"}]}' }
+            'published-empty' { '{"isDraft":false,"draft":false,"assets":[]}' }
+            'published-partial' {
+                $flotekaDigest = (Get-FileHash dist/release/Floteka.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+                @{ isDraft = $false; assets = @(@{ name = 'Floteka.exe'; digest = "sha256:$flotekaDigest" }) } | ConvertTo-Json -Depth 4 -Compress
+            }
+            'published-complete' {
+                $flotekaRemoteAssets = foreach ($flotekaFile in $flotekaAssets) {
+                    @{ name = Split-Path -Leaf $flotekaFile; digest = 'sha256:' + (Get-FileHash $flotekaFile -Algorithm SHA256).Hash.ToLowerInvariant() }
+                }
+                @{ isDraft = $false; assets = @($flotekaRemoteAssets) } | ConvertTo-Json -Depth 4 -Compress
+            }
+            'published-no-digest' { '{"isDraft":false,"draft":false,"assets":[{"name":"Floteka.exe"}]}' }
         }
     }
 }
@@ -133,3 +151,37 @@ def test_requested_excel_cannot_silently_publish_without_workbooks(tmp_path):
     result, calls = run_publication(tmp_path, missing_excel=True)
     assert result.returncode != 0
     assert calls == []
+
+
+@pytest.mark.parametrize('dev', [False, True])
+@pytest.mark.parametrize('excel', [False, True])
+def test_published_empty_release_receives_files_without_overwriting(tmp_path, dev, excel):
+    result, calls = run_publication(tmp_path, dev=dev, excel=excel, scenario='published-empty')
+    assert result.returncode == 0, result.stderr
+    upload = next(call for call in calls if call[:2] == ['release', 'upload'])
+    assert '--clobber' not in upload
+    assert any(str(arg).endswith('Floteka.exe') for arg in upload)
+    assert any(str(arg).endswith('Floteka.xlsm') for arg in upload) is excel
+    assert not any(call[:2] in (['release', 'create'], ['release', 'edit']) for call in calls)
+
+
+def test_published_release_uploads_only_missing_assets(tmp_path):
+    result, calls = run_publication(tmp_path, scenario='published-partial')
+    assert result.returncode == 0, result.stderr
+    upload = next(call for call in calls if call[:2] == ['release', 'upload'])
+    assert '--clobber' not in upload
+    assert not any(str(arg).endswith('Floteka.exe') for arg in upload)
+    assert any(str(arg).endswith('Floteka.xlsm') for arg in upload)
+    assert not any(call[:2] == ['release', 'edit'] for call in calls)
+
+
+def test_matching_published_release_is_a_successful_noop(tmp_path):
+    result, calls = run_publication(tmp_path, scenario='published-complete')
+    assert result.returncode == 0, result.stderr
+    assert not any(call[0] == 'release' and call[1] in ('create', 'upload', 'edit') for call in calls)
+
+
+def test_unverifiable_published_asset_is_not_overwritten(tmp_path):
+    result, calls = run_publication(tmp_path, scenario='published-no-digest')
+    assert result.returncode != 0
+    assert not any(call[0] == 'release' and call[1] in ('create', 'upload', 'edit') for call in calls)

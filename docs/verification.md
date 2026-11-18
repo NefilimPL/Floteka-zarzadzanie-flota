@@ -89,3 +89,10 @@ repozytorium `FLOTEKA_BUILD_EXCEL=true`; wymaga to runnera z Microsoft Excelem.
 W tym trybie sprawdź również zadanie Excel i zgodność obu raportów
 `build-info.json` i `excel-build.json`. Błąd włączonej budowy XLSM musi blokować
 publikację zamiast tworzyć niepełne wydanie.
+
+Przetestuj również istniejący Release utworzony wcześniej przez stronę GitHuba:
+pusty otrzymuje załączniki, częściowy otrzymuje tylko brakujące pliki, a pełny
+zgodny zestaw kończy krok bez zapisów. Sumy SHA-256 istniejących plików muszą
+pasować do lokalnych artefaktów; inna zawartość lub brak sumy blokuje dodawanie.
+Ponowienie samego zadania Release używa dotychczasowych artefaktów. Ponowna
+budowa EXE może dać inne bajty; wtedy należy użyć nowego tagu wersji.

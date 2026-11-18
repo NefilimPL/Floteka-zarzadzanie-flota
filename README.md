@@ -151,8 +151,12 @@ i wypchnij nowy tag wersji. Ponowienie starego uruchomienia użyje starego workf
 
 Publikacja korzysta z `GITHUB_TOKEN` i uprawnienia `contents: write` wyłącznie
 w zadaniu `release`. Pull requesty i zwykłe zmiany gałęzi nie uruchamiają
-runnera Excel ani publikacji. Ponowne uruchomienie może dokończyć szkic Release;
-już opublikowane pliki nie są automatycznie zastępowane.
+runnera Excel ani publikacji. Ponowne uruchomienie może dokończyć szkic Release.
+Jeśli wydanie utworzono wcześniej przez stronę GitHuba, workflow uzupełnia jego
+brakujące załączniki bez zmieniania opisu. Istniejące opublikowane pliki muszą
+mieć sumy SHA-256 zgodne z plikami tej budowy; zgodny komplet kończy krok
+powodzeniem bez ponownego wysyłania. Inna zawartość lub brak sumy SHA-256
+zatrzymuje krok z prośbą o nowy tag wersji. Opublikowane pliki nie są nadpisywane.
 
 Plik workflow musi najpierw trafić do repozytorium na GitHub. Aby zobaczyć
 przycisk ręcznego uruchomienia, umieść go na domyślnej gałęzi `main`.

@@ -256,17 +256,39 @@ jobs:
           $flotekaChannel = if ($env:FLOTEKA_PRERELEASE -eq 'true') { 'dev' } else { 'tag' }
           $flotekaContents = if ($env:FLOTEKA_INCLUDE_EXCEL -eq 'true') { 'Pliki EXE i XLSM maja wspolna wersje. Narzedzia dzialaja niezaleznie.' } else { 'Wydanie aplikacji EXE. Microsoft Excel nie jest wymagany. Budowa XLSM jest wylaczona.' }
           @("Floteka $env:FLOTEKA_VERSION", '', "Tag: $env:FLOTEKA_TAG", "Kod: $flotekaChannel", "Commit: $env:FLOTEKA_SOURCE", '', $flotekaContents) | Set-Content dist/release/RELEASE.md -Encoding utf8
-          # Stage assets as a draft; only publish after every upload succeeds.
+          # gh resolves published releases and drafts; asset data includes SHA256.
           $flotekaExisting = gh release view $env:FLOTEKA_TAG --json isDraft,assets 2>$null
           if ($LASTEXITCODE -eq 0) {
             $flotekaDraft = $flotekaExisting | ConvertFrom-Json
-            if (-not $flotekaDraft.isDraft) { throw 'This Release is already published; its files will not be replaced.' }
             $flotekaAllowedNames = @($flotekaAssets | ForEach-Object { Split-Path -Leaf $_ })
             foreach ($flotekaExistingAsset in $flotekaDraft.assets) {
-              if ($flotekaExistingAsset.name -notin $flotekaAllowedNames) { throw 'The existing draft contains additional files; it will not be published automatically.' }
+              if ($flotekaExistingAsset.name -notin $flotekaAllowedNames) { throw 'The existing Release contains additional files; it will not be modified automatically.' }
+            }
+            if (-not $flotekaDraft.isDraft) {
+              # Publishing a Release in the web UI can create an empty published
+              # Release before this build finishes. Add missing files without
+              # replacing existing binaries or editing the user's changelog.
+              $flotekaExistingNames = @($flotekaDraft.assets | ForEach-Object { $_.name })
+              foreach ($flotekaExistingAsset in $flotekaDraft.assets) {
+                $flotekaLocalFile = Join-Path 'dist/release' $flotekaExistingAsset.name
+                $flotekaExpectedDigest = 'sha256:' + (Get-FileHash -LiteralPath $flotekaLocalFile -Algorithm SHA256).Hash.ToLowerInvariant()
+                if ($flotekaExistingAsset.digest -ne $flotekaExpectedDigest) {
+                  throw "Published asset differs or has no verifiable SHA256: $($flotekaExistingAsset.name). Create a new version tag; existing files will not be replaced."
+                }
+              }
+              $flotekaMissingAssets = @($flotekaAssets | Where-Object { (Split-Path -Leaf $_) -notin $flotekaExistingNames })
+              if ($flotekaMissingAssets.Count -gt 0) {
+                gh release upload $env:FLOTEKA_TAG @flotekaMissingAssets
+                if ($LASTEXITCODE -ne 0) { throw 'Upload of missing Release files failed.' }
+                Write-Output 'Added missing files to the existing published Release.'
+              } else {
+                Write-Output 'The Release already contains all files with matching SHA256.'
+              }
+              exit 0
             }
             gh release upload $env:FLOTEKA_TAG @flotekaAssets --clobber
           } else {
+            # New releases remain drafts until every upload succeeds.
             $flotekaOptions = @('--verify-tag', '--draft', '--title', "Floteka $env:FLOTEKA_VERSION", '--notes-file', 'dist/release/RELEASE.md')
             if ($env:FLOTEKA_PRERELEASE -eq 'true') { $flotekaOptions += '--prerelease' }
             gh release create $env:FLOTEKA_TAG @flotekaAssets @flotekaOptions
