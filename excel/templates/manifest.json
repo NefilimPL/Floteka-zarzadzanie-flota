@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "version": "1.1.2",
+  "source_hashes": {
+    "excel/Flota.bas": "f983076b33c023dab254263d7bf45e2f1e26bba23a84f944e48a883cc8b6f563",
+    "excel/ThisWorkbook.cls": "d9c2875a27d319f92b60c120cf6737b948fd5929f0201452bbfb8394f571fd64",
+    "tools/build_excel.py": "d4451ef88c0b86eb25b087c32372b53b1bac4c209b4d3645825feb9be367f3df"
+  },
+  "files": {
+    "Floteka.xlsm": {
+      "sha256": "cf6f787534ec3ed4e0196abb4707f0549fc3d5d002763ea843293d3dedccc980"
+    },
+    "Floteka-DEMO.xlsm": {
+      "sha256": "945baf7af026c071bad530f7bb34a83a604ba173df72d2e4657005c2b82e592b"
+    }
+  },
+  "verified_in_excel": {
+    "version": "16.0",
+    "utc": "2026-11-18T18:14:30.083578+00:00",
+    "checks": [
+      "test_excel.py",
+      "test_excel_regressions.py",
+      "test_deadlines_excel.py",
+      "test_optional_excel.py"
+    ],
+    "layout_and_version_tests": true
+  }
+}

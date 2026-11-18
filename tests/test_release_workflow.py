@@ -15,18 +15,23 @@ pytestmark = pytest.mark.skipif(not POWERSHELL, reason='PowerShell is required f
 COMMIT = 'a' * 40
 
 
-def run_publication(tmp_path, *, dev=True, scenario='new', mismatch=False):
+def run_publication(tmp_path, *, dev=True, scenario='new', mismatch=False, excel=True,
+                    missing_excel=False):
     version = '1.2.3.4-dev' if dev else '1.2.3.4'
     tag = 'v' + version
     folder = tmp_path / 'dist' / 'release'
     folder.mkdir(parents=True)
-    for name in ('Floteka.exe', 'Floteka.xlsm', 'Floteka-DEMO.xlsm', 'INSTRUKCJA.md', 'exe-test.json'):
+    names = ['Floteka.exe', 'INSTRUKCJA.md', 'exe-test.json']
+    if excel and not missing_excel:
+        names += ['Floteka.xlsm', 'Floteka-DEMO.xlsm']
+    for name in names:
         (folder / name).write_text('test asset', encoding='utf-8')
     report = {'version': version, 'tag': tag, 'commit': COMMIT}
     (folder / 'build-info.json').write_text(json.dumps(report), encoding='utf-8')
     if mismatch:
         report['commit'] = 'b' * 40
-    (folder / 'excel-build.json').write_text(json.dumps(report), encoding='utf-8')
+    if excel and not missing_excel:
+        (folder / 'excel-build.json').write_text(json.dumps(report), encoding='utf-8')
     workflow = yaml.safe_load((ROOT / '.github' / 'workflows' / 'build-exe.yml').read_text(encoding='utf-8'))
     script = workflow['jobs']['release']['steps'][-1]['run']
     # This function shadows gh, records every API command and has no network code.
@@ -54,6 +59,7 @@ function global:gh {
     harness.write_text(mock + '\n' + script, encoding='utf-8')
     env = dict(os.environ, GH_TOKEN='unused-test-token', GH_REPO='example/floteka',
                FLOTEKA_TAG=tag, FLOTEKA_VERSION=version, FLOTEKA_SOURCE=COMMIT,
+               FLOTEKA_INCLUDE_EXCEL=str(excel).lower(),
                FLOTEKA_PRERELEASE=str(dev).lower(), TEST_SCENARIO=scenario)
     result = subprocess.run([POWERSHELL, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(harness)],
                             cwd=tmp_path, env=env, capture_output=True, text=True)
@@ -105,3 +111,25 @@ def test_moved_stable_tag_cannot_publish_the_wrong_source(tmp_path):
     result, calls = run_publication(tmp_path, dev=False, scenario='moved-tag')
     assert result.returncode != 0
     assert not any(call[:2] == ['release', 'create'] for call in calls)
+
+
+@pytest.mark.parametrize('dev', [False, True])
+def test_release_without_office_publishes_exe_and_its_checksums(tmp_path, dev):
+    result, calls = run_publication(tmp_path, dev=dev, excel=False)
+    assert result.returncode == 0, result.stderr
+    create = next(call for call in calls if call[:2] == ['release', 'create'])
+    assert any(str(arg).endswith('Floteka.exe') for arg in create)
+    assert not any(str(arg).endswith(('.xlsm', 'excel-build.json')) for arg in create)
+    assert calls[-1][:2] == ['release', 'edit']
+    folder = tmp_path / 'dist' / 'release'
+    sums = (folder / 'SUMY-SHA256.txt').read_text(encoding='utf-8-sig')
+    assert '  Floteka.exe' in sums
+    assert '.xlsm' not in sums
+    notes = (folder / 'RELEASE.md').read_text(encoding='utf-8-sig')
+    assert 'EXE i XLSM' not in notes
+
+
+def test_requested_excel_cannot_silently_publish_without_workbooks(tmp_path):
+    result, calls = run_publication(tmp_path, missing_excel=True)
+    assert result.returncode != 0
+    assert calls == []

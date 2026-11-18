@@ -19,6 +19,8 @@ build/
 *.xls
 *.xlsx
 *.xlsm
+!/excel/templates/Floteka.xlsm
+!/excel/templates/Floteka-DEMO.xlsm
 *.xlsb
 *.xlam
 ~$*
