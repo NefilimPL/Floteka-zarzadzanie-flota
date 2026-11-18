@@ -4,7 +4,7 @@
 
 Aktualne wydanie znajduje się w `dist/Floteka`. Wyniki budowania EXE/XLSM/ZIP
 są pomijane przez Git; repozytorium przechowuje źródła i narzędzia budowy.
-Starsze lokalne dostawy zachowano w `local-archive`, poza drzewem źródeł.
+Starsze lokalne dostawy zachowano w `local-archive`, poza drzewem źródeł,
 
 Kolory całych wierszy zależą od **daty rozładunku**: przed dzisiaj — czerwony,
 dziś lub jutro — pomarańczowy; późniejsze i puste daty mają zwykłe tło.
@@ -101,14 +101,14 @@ Kompletne wpisy są od razu kopiowane do historii, nawet gdy nadal są widoczne.
 
 ## Który plik uruchomić
 
-| Plik | Zastosowanie |
-| --- | --- |
-| `Floteka.xlsm` | Pusty skoroszyt do właściwej pracy w Excelu. |
-| `Floteka-DEMO.xlsm` | Oddzielny skoroszyt z fikcyjnymi przykładami. |
-| `Floteka-TWOJE-DANE.xlsm` | Poprawiona kopia dotychczasowych danych, jeśli dołączona do pakietu. |
-| `Floteka.exe` | Samodzielna aplikacja Windows 64-bit z SQLite. Python nie jest potrzebny. |
-| `Uruchom-DEMO.bat` | Uruchamia EXE na osobnej przykładowej bazie `Floteka-DEMO.sqlite3`. |
-| `Zrodla.zip` | Kod aplikacji, VBA, testy i narzędzia budowy. |
+| Plik                        | Zastosowanie                                                              |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `Floteka.xlsm`            | Pusty skoroszyt do właściwej pracy w Excelu.                            |
+| `Floteka-DEMO.xlsm`       | Oddzielny skoroszyt z fikcyjnymi przykładami.                            |
+| `Floteka-TWOJE-DANE.xlsm` | Poprawiona kopia dotychczasowych danych, jeśli dołączona do pakietu.   |
+| `Floteka.exe`             | Samodzielna aplikacja Windows 64-bit z SQLite. Python nie jest potrzebny. |
+| `Uruchom-DEMO.bat`        | Uruchamia EXE na osobnej przykładowej bazie `Floteka-DEMO.sqlite3`.    |
+| `Zrodla.zip`              | Kod aplikacji, VBA, testy i narzędzia budowy.                            |
 
 Najpierw rozpakuj cały pakiet ZIP do wybranego folderu. Skoroszyty i aplikacja
 nie synchronizują danych. Eksport aplikacji tworzy zwykły plik XLSX z danymi.
