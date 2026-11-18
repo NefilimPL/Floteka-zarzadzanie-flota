@@ -3,6 +3,35 @@
 Ta instrukcja opisuje sprawdzanie bieżącej wersji. Wyniki każdego uruchomienia
 są zapisywane w raportach; dokument nie zastępuje testów konkretnego wydania.
 
+## Lokalny pakiet bez Office
+
+Na Windows z Pythonem 3.13 x64, Tcl/Tk, pip i dostępem do pulpitu uruchom
+`Buduj.bat`. Pierwsze pobranie zależności wymaga internetu. Skrypt instaluje je
+w `build/local-venv`, tworzy oba XLSM ze sprawdzonych szablonów, wykonuje pełne
+testy aplikacji oraz struktury, układu i wersji XLSM, buduje i testuje EXE,
+a następnie pakuje pliki. Każdy etap musi zakończyć się powodzeniem.
+
+Wynik trafia do nowego `dist/Floteka-lokalnie/<data-godzina>`; własny katalog
+podany przez `Buduj.bat -OutputDirectory "D:\Pakiety\Nowy"` musi być pusty.
+Wersję ustawia `-Tag V1.0.0.0` lub `-Tag v1.0.0.0-dev`. Błąd zatrzymuje przebieg;
+zapis konsoli znajduje się w `build.log` w katalogu wyniku.
+
+Sprawdź raport `test-results.xml`, `exe-test.json` (`ok`, `frozen`, nazwa i wersja),
+`build-info.json` (wersja, tag, commit i SHA-256 EXE) oraz `excel-build.json`
+(zgodna wersja, tag, commit i SHA-256 obu XLSM). Pakowanie ponownie sprawdza
+zgodność raportów z rzeczywistymi plikami. `SUMY-SHA256.txt` w katalogu wyniku
+obejmuje również ZIP pakietu; lista wewnątrz ZIP obejmuje jego zawartość.
+`Zrodla.zip` zawiera launcher, potrzebne narzędzia i szablony. W paczce nie ma
+użytkowych baz, migrowanych skoroszytów ani środowiska budowy.
+
+Ten przebieg nie uruchamia Excela: `excel-build.json` jawnie zapisuje
+`engine: "template"` i `macro_tests_run: false`. Zachowanie binarnego projektu
+VBA i przycisków oraz testy struktury nie potwierdzają wykonania makr podczas
+tej budowy. Do ponownego sprawdzenia makr służy osobna procedura poniżej.
+Aktualizacja VBA lub układu wymaga `python -m tools.refresh_excel_templates`
+na komputerze z Excelem i pywin32 oraz ponownych testów makr. Niezgodność sum
+szablonów albo powiązanych źródeł blokuje zwykłą budowę.
+
 ## Testy aplikacji
 
 Wymagane są Windows, Python 3.13 z Tcl/Tk i dostęp do pulpitu:
@@ -53,6 +82,17 @@ EXE. Testy makr pracują na kopiach w `build`; raporty powstają w `docs/*.json`
 Podanie `-dev` zachowuje ten sufiks w wersji. W GitHub Actions taki tag wybiera
 gałąź `dev`; szczegóły konfiguracji runnera Excel opisuje główny README.
 
-Udany lokalny test nie potwierdza wykonania workflow na GitHub. Dla wydania
-sprawdź wynik zadań EXE, Excel i Release oraz zgodność tagu, wersji i commitu
-w `build-info.json` i `excel-build.json`.
+Udany lokalny test nie potwierdza wykonania workflow na GitHub. Dla domyślnego
+wydania bez Office sprawdź wynik zadań EXE i Release, pominięcie zadania Excel
+oraz tag, wersję i commit w `build-info.json`. Budowę XLSM włącza zmienna
+repozytorium `FLOTEKA_BUILD_EXCEL=true`; wymaga to runnera z Microsoft Excelem.
+W tym trybie sprawdź również zadanie Excel i zgodność obu raportów
+`build-info.json` i `excel-build.json`. Błąd włączonej budowy XLSM musi blokować
+publikację zamiast tworzyć niepełne wydanie.
+
+Przetestuj również istniejący Release utworzony wcześniej przez stronę GitHuba:
+pusty otrzymuje załączniki, częściowy otrzymuje tylko brakujące pliki, a pełny
+zgodny zestaw kończy krok bez zapisów. Sumy SHA-256 istniejących plików muszą
+pasować do lokalnych artefaktów; inna zawartość lub brak sumy blokuje dodawanie.
+Ponowienie samego zadania Release używa dotychczasowych artefaktów. Ponowna
+budowa EXE może dać inne bajty; wtedy należy użyć nowego tagu wersji.

@@ -123,7 +123,8 @@ jobs:
   excel:
     name: Zbuduj i sprawdz XLSM w Excelu
     needs: windows-exe
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    # Opt in only after configuring a runner with desktop Microsoft Excel.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && vars.FLOTEKA_BUILD_EXCEL == 'true'
     runs-on: [self-hosted, Windows, X64, excel]
     timeout-minutes: 30
     defaults:
@@ -191,9 +192,14 @@ jobs:
           retention-days: 14
 
   release:
-    name: Opublikuj GitHub Release z EXE i XLSM
+    name: Opublikuj GitHub Release
     needs: [windows-exe, excel]
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    # A skipped optional Excel job must not skip the EXE release. If Excel was
+    # requested, publish only after it succeeds; never hide an Excel failure.
+    if: >-
+      always() && !cancelled() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') &&
+      needs.windows-exe.result == 'success' &&
+      (needs.excel.result == 'success' || (needs.excel.result == 'skipped' && vars.FLOTEKA_BUILD_EXCEL != 'true'))
     runs-on: windows-2025
     permissions:
       contents: write
@@ -208,6 +214,7 @@ jobs:
           path: dist/release
 
       - name: Pobierz XLSM
+        if: needs.excel.result == 'success'
         uses: actions/download-artifact@v8
         with:
           name: Floteka-Excel
@@ -221,19 +228,25 @@ jobs:
           FLOTEKA_VERSION: ${{ needs.windows-exe.outputs.version }}
           FLOTEKA_PRERELEASE: ${{ needs.windows-exe.outputs.prerelease }}
           FLOTEKA_SOURCE: ${{ needs.windows-exe.outputs.source_sha }}
+          FLOTEKA_INCLUDE_EXCEL: ${{ needs.excel.result == 'success' }}
         run: |
           $flotekaBuild = Get-Content dist/release/build-info.json -Raw | ConvertFrom-Json
-          $flotekaExcel = Get-Content dist/release/excel-build.json -Raw | ConvertFrom-Json
-          foreach ($flotekaReport in @($flotekaBuild, $flotekaExcel)) {
+          $flotekaReports = @($flotekaBuild)
+          $flotekaNames = @('Floteka.exe', 'INSTRUKCJA.md', 'exe-test.json', 'build-info.json')
+          if ($env:FLOTEKA_INCLUDE_EXCEL -eq 'true') {
+            $flotekaReports += Get-Content dist/release/excel-build.json -Raw | ConvertFrom-Json
+            $flotekaNames += @('Floteka.xlsm', 'Floteka-DEMO.xlsm', 'excel-build.json')
+          }
+          foreach ($flotekaReport in $flotekaReports) {
             if ($flotekaReport.version -ne $env:FLOTEKA_VERSION -or $flotekaReport.tag -ne $env:FLOTEKA_TAG -or $flotekaReport.commit -ne $env:FLOTEKA_SOURCE) {
-              throw 'EXE and XLSM must match the requested tag, version and source commit.'
+              throw 'Release files must match the requested tag, version and source commit.'
             }
           }
           if ($env:FLOTEKA_PRERELEASE -ne 'true') {
             $flotekaTagCommit = gh api "repos/$env:GH_REPO/commits/$env:FLOTEKA_TAG" --jq .sha
             if ($LASTEXITCODE -ne 0 -or $flotekaTagCommit -ne $env:FLOTEKA_SOURCE) { throw 'The stable tag no longer points to the built source commit.' }
           }
-          $flotekaAssets = @('Floteka.exe', 'Floteka.xlsm', 'Floteka-DEMO.xlsm', 'INSTRUKCJA.md', 'exe-test.json', 'build-info.json', 'excel-build.json') | ForEach-Object { Join-Path 'dist/release' $_ }
+          $flotekaAssets = $flotekaNames | ForEach-Object { Join-Path 'dist/release' $_ }
           $flotekaSums = foreach ($flotekaAsset in $flotekaAssets) {
             $flotekaHash = (Get-FileHash -LiteralPath $flotekaAsset -Algorithm SHA256).Hash.ToLowerInvariant()
             "$flotekaHash  $(Split-Path -Leaf $flotekaAsset)"
@@ -241,18 +254,41 @@ jobs:
           $flotekaSums | Set-Content dist/release/SUMY-SHA256.txt -Encoding utf8
           $flotekaAssets += 'dist/release/SUMY-SHA256.txt'
           $flotekaChannel = if ($env:FLOTEKA_PRERELEASE -eq 'true') { 'dev' } else { 'tag' }
-          @("Floteka $env:FLOTEKA_VERSION", '', "Tag: $env:FLOTEKA_TAG", "Kod: $flotekaChannel", "Commit EXE i XLSM: $env:FLOTEKA_SOURCE", '', 'Pliki EXE i XLSM maja wspolna wersje. Narzedzia dzialaja niezaleznie.') | Set-Content dist/release/RELEASE.md -Encoding utf8
-          # Stage assets as a draft; only publish after every upload succeeds.
+          $flotekaContents = if ($env:FLOTEKA_INCLUDE_EXCEL -eq 'true') { 'Pliki EXE i XLSM maja wspolna wersje. Narzedzia dzialaja niezaleznie.' } else { 'Wydanie aplikacji EXE. Microsoft Excel nie jest wymagany. Budowa XLSM jest wylaczona.' }
+          @("Floteka $env:FLOTEKA_VERSION", '', "Tag: $env:FLOTEKA_TAG", "Kod: $flotekaChannel", "Commit: $env:FLOTEKA_SOURCE", '', $flotekaContents) | Set-Content dist/release/RELEASE.md -Encoding utf8
+          # gh resolves published releases and drafts; asset data includes SHA256.
           $flotekaExisting = gh release view $env:FLOTEKA_TAG --json isDraft,assets 2>$null
           if ($LASTEXITCODE -eq 0) {
             $flotekaDraft = $flotekaExisting | ConvertFrom-Json
-            if (-not $flotekaDraft.isDraft) { throw 'This Release is already published; its files will not be replaced.' }
             $flotekaAllowedNames = @($flotekaAssets | ForEach-Object { Split-Path -Leaf $_ })
             foreach ($flotekaExistingAsset in $flotekaDraft.assets) {
-              if ($flotekaExistingAsset.name -notin $flotekaAllowedNames) { throw 'The existing draft contains additional files; it will not be published automatically.' }
+              if ($flotekaExistingAsset.name -notin $flotekaAllowedNames) { throw 'The existing Release contains additional files; it will not be modified automatically.' }
+            }
+            if (-not $flotekaDraft.isDraft) {
+              # Publishing a Release in the web UI can create an empty published
+              # Release before this build finishes. Add missing files without
+              # replacing existing binaries or editing the user's changelog.
+              $flotekaExistingNames = @($flotekaDraft.assets | ForEach-Object { $_.name })
+              foreach ($flotekaExistingAsset in $flotekaDraft.assets) {
+                $flotekaLocalFile = Join-Path 'dist/release' $flotekaExistingAsset.name
+                $flotekaExpectedDigest = 'sha256:' + (Get-FileHash -LiteralPath $flotekaLocalFile -Algorithm SHA256).Hash.ToLowerInvariant()
+                if ($flotekaExistingAsset.digest -ne $flotekaExpectedDigest) {
+                  throw "Published asset differs or has no verifiable SHA256: $($flotekaExistingAsset.name). Create a new version tag; existing files will not be replaced."
+                }
+              }
+              $flotekaMissingAssets = @($flotekaAssets | Where-Object { (Split-Path -Leaf $_) -notin $flotekaExistingNames })
+              if ($flotekaMissingAssets.Count -gt 0) {
+                gh release upload $env:FLOTEKA_TAG @flotekaMissingAssets
+                if ($LASTEXITCODE -ne 0) { throw 'Upload of missing Release files failed.' }
+                Write-Output 'Added missing files to the existing published Release.'
+              } else {
+                Write-Output 'The Release already contains all files with matching SHA256.'
+              }
+              exit 0
             }
             gh release upload $env:FLOTEKA_TAG @flotekaAssets --clobber
           } else {
+            # New releases remain drafts until every upload succeeds.
             $flotekaOptions = @('--verify-tag', '--draft', '--title', "Floteka $env:FLOTEKA_VERSION", '--notes-file', 'dist/release/RELEASE.md')
             if ($env:FLOTEKA_PRERELEASE -eq 'true') { $flotekaOptions += '--prerelease' }
             gh release create $env:FLOTEKA_TAG @flotekaAssets @flotekaOptions

@@ -3,8 +3,9 @@
 **Kierowcy, tiry i przyczepy — terminy rozładunku i pełna historia.**
 
 Floteka udostępnia aplikację Windows z bazą SQLite oraz niezależny skoroszyt
-Excel z makrami. Gotowe pliki są publikowane w GitHub Releases. Lokalna budowa
-zapisuje je w `dist/Floteka`; repozytorium przechowuje źródła i narzędzia budowy.
+Excel z makrami. Gotowe pliki są publikowane w GitHub Releases. Lokalny generator
+`Buduj.bat` zapisuje nowy pakiet w `dist/Floteka-lokalnie/<data-godzina>`;
+repozytorium przechowuje źródła, narzędzia budowy i sprawdzone szablony XLSM.
 
 Kolory całych wierszy zależą od **daty rozładunku**: przed dzisiaj — czerwony,
 dziś lub jutro — pomarańczowy; późniejsze i puste daty mają zwykłe tło.
@@ -46,6 +47,38 @@ Jeżeli uzupełniono telefon lub dane tirów, eksport bieżących danych dodaje
 odpowiednio arkusze KIEROWCY i TIRY. Eksport pojedynczego kierowcy ogranicza
 rejestry do jego danych, a eksport wszystkich obejmuje także tiry bez przypisania.
 
+## Lokalna budowa jednym plikiem
+
+Na Windows 64-bit zainstaluj **Python 3.13 x64 z pip i Tcl/Tk** (opcja
+instalatora „tcl/tk and IDLE”) oraz dodaj Python do PATH. Potrzebny jest dostęp
+do internetu do pobrania zależności i zalogowana sesja pulpitu do testów GUI.
+Otwórz folder źródeł i kliknij dwukrotnie **`Buduj.bat`**. Generator tworzy
+`Floteka.exe`, pusty `Floteka.xlsm`, przykładowy `Floteka-DEMO.xlsm`, oddzielną
+bazę DEMO oraz `Floteka-pakiet.zip`, `Zrodla.zip`, raporty i sumy SHA-256.
+
+**Budowa nie wymaga Office, Microsoft 365 ani runnera GitHub.** Makra są
+zachowywane ze sprawdzonych szablonów. Używanie przycisków VBA w gotowym XLSM
+wymaga klasycznego Excela dla Windows. Generator sprawdza strukturę, układ,
+wersję i sumy plików; raport `excel-build.json` ma `engine: "template"` oraz
+`macro_tests_run: false`, ponieważ ten przebieg nie uruchamia makr w Excelu.
+
+Każdy przebieg używa nowego katalogu wyniku i izolowanego środowiska
+`build/local-venv`. Nie instaluje bibliotek w globalnym Pythonie i nie
+nadpisuje poprzednich pakietów ani baz użytkownika. Błąd zatrzymuje budowę;
+szczegóły znajdują się w `build.log` w katalogu wyniku. Własny katalog musi
+być pusty. Wersję i miejsce zapisu można podać w PowerShell:
+
+```powershell
+.\Buduj.bat -Tag v1.0.0.0-dev
+.\Buduj.bat -Tag V1.0.0.0 -OutputDirectory "D:\Pakiety\Floteka-1.0.0.0"
+```
+
+Parametr `-Tag` ustawia wersję bieżącego kodu, bez przełączania gałęzi.
+Zawartość `Zrodla.zip` pozwala ponownie uruchomić `Buduj.bat`, także bez Git.
+Zmiana kodu VBA lub układu wymaga odświeżenia szablonów przez opiekuna projektu
+na komputerze z Excelem (`python -m tools.refresh_excel_templates`), a następnie
+sprawdzenia makr. Nieaktualne lub zmienione szablony zatrzymują zwykłą budowę.
+
 ## GitHub Release i wersja z tagu
 
 Workflow `.github/workflows/build-exe.yml` nazywa się **Floteka - Windows EXE**.
@@ -58,17 +91,18 @@ buduje `Floteka.exe` i wykonuje test już spakowanego programu. Artefakt zawiera
 EXE, instrukcję, sumę SHA-256 i raporty. Nie zawiera baz ani skoroszytów
 użytkownika. Budowa EXE nie wymaga własnych sekretów ani zainstalowanego Excela.
 
-Wypchnięcie poprawnego tagu uruchamia także budowę XLSM i publikację
-**GitHub Release** z `Floteka.exe`, `Floteka.xlsm`, `Floteka-DEMO.xlsm`,
-instrukcją, sumami SHA-256 i raportami. Wydanie jest publikowane dopiero po
-pomyślnych testach EXE oraz układu, wersji i makr XLSM.
+Wypchnięcie poprawnego tagu domyślnie publikuje **GitHub Release** z
+`Floteka.exe`, instrukcją, sumami SHA-256 i raportami po pomyślnych testach EXE.
+Nie wymaga to Microsoft Office, Microsoft 365 ani własnego runnera.
+Opcjonalna budowa XLSM dodaje `Floteka.xlsm` i `Floteka-DEMO.xlsm` do tego samego
+wydania; wtedy publikacja wymaga również pomyślnych testów układu, wersji i makr XLSM.
 
 | Tag | Wersja w plikach | Kod źródłowy | GitHub Release |
 | --- | --- | --- | --- |
 | `V1.0.0.0` lub `v1.0.0.0` | `1.0.0.0` | Commit wskazany przez tag | Zwykłe wydanie |
 | `v1.0.0.0-dev` | `1.0.0.0-dev` | Gałąź `dev` pobrana przy rozpoczęciu budowy | Prerelease, bez oznaczenia Latest |
 
-EXE i XLSM zawsze używają tego samego commitu. Jego SHA jest zapisane w
+Jeśli budowa XLSM jest włączona, EXE i XLSM używają tego samego commitu. Jego SHA jest zapisane w
 `build-info.json`, `excel-build.json` i opisie Release. Tag `-dev` nie uruchomi
 budowy z innej gałęzi, jeśli `dev` nie istnieje. Zmiana workflow i narzędzi
 budowy musi być dostępna również na `dev` przed pierwszym wydaniem testowym.
@@ -84,6 +118,12 @@ Budowa bez tagu korzysta z domyślnej wersji zapisanej w `fleet/branding.py`.
 
 ### Runner wymagany do budowy XLSM
 
+**Domyślnie budowa XLSM jest wyłączona.** Bez desktopowego Microsoft Excela
+workflow publikuje samodzielną aplikację `Floteka.exe`; jej instalacja i działanie
+nie wymagają Office. Opcjonalne zadanie GitHub budujące XLSM od podstaw i testy
+makr używają automatyzacji Microsoft Excela. Lokalny `Buduj.bat` korzysta ze
+sprawdzonych szablonów i działa bez Office. LibreOffice nie zastępuje testów VBA.
+
 Zadanie `excel` wymaga własnego runnera GitHub Actions z etykietami
 `self-hosted`, `Windows`, `X64`, `excel`. Na tym komputerze zainstaluj
 desktopowy Excel i PowerShell 7 (`pwsh`). Uruchom aktualnego runnera
@@ -95,14 +135,28 @@ bez podwyższonych uprawnień. Workflow instaluje Python i biblioteki, tworzy no
 skoroszyty oraz DEMO i testuje makra na kopiach. Nie używa danych użytkownika.
 Przygotowanie interpretera opisuje też
 [dokumentacja setup-python dla własnych runnerów](https://github.com/actions/setup-python/blob/main/docs/advanced-usage.md#using-setup-python-with-a-self-hosted-runner).
-Bez tego runnera zadanie XLSM oczekuje w kolejce, a Release nie zostaje opublikowany.
 Dodanie runnera: **Settings → Actions → Runners → New self-hosted runner**;
 podczas konfiguracji dodaj etykietę `excel`.
 
+Po przygotowaniu runnera włącz XLSM w **Settings → Secrets and variables →
+Actions → Variables → New repository variable**: nazwa `FLOTEKA_BUILD_EXCEL`,
+wartość `true`. Bez tej zmiennej (lub z inną wartością) workflow pomija Excel
+i publikuje EXE. Po włączeniu opcji niedostępny runner ponownie spowoduje
+oczekiwanie; błąd budowy lub testów XLSM blokuje całe wydanie.
+
+Zmiana workflow dotyczy nowych uruchomień. Zadanie już oczekujące na runner
+można anulować; gotowy EXE pozostaje dostępny w jego artefakcie
+`Floteka-Windows-x64`. Aby opublikować wydanie z poprawką, przenieś ją do `main`
+i wypchnij nowy tag wersji. Ponowienie starego uruchomienia użyje starego workflow.
+
 Publikacja korzysta z `GITHUB_TOKEN` i uprawnienia `contents: write` wyłącznie
 w zadaniu `release`. Pull requesty i zwykłe zmiany gałęzi nie uruchamiają
-runnera Excel ani publikacji. Ponowne uruchomienie może dokończyć szkic Release;
-już opublikowane pliki nie są automatycznie zastępowane.
+runnera Excel ani publikacji. Ponowne uruchomienie może dokończyć szkic Release.
+Jeśli wydanie utworzono wcześniej przez stronę GitHuba, workflow uzupełnia jego
+brakujące załączniki bez zmieniania opisu. Istniejące opublikowane pliki muszą
+mieć sumy SHA-256 zgodne z plikami tej budowy; zgodny komplet kończy krok
+powodzeniem bez ponownego wysyłania. Inna zawartość lub brak sumy SHA-256
+zatrzymuje krok z prośbą o nowy tag wersji. Opublikowane pliki nie są nadpisywane.
 
 Plik workflow musi najpierw trafić do repozytorium na GitHub. Aby zobaczyć
 przycisk ręcznego uruchomienia, umieść go na domyślnej gałęzi `main`.
@@ -114,8 +168,10 @@ python -m pip install -r requirements-build.txt
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/build_exe.ps1
 ```
 
-Wynik: `dist/Floteka/Floteka.exe`. Lokalny pełny pakiet z XLSM wymaga Excela
-i pywin32 oraz skryptu `tools/build_release.ps1`. Wersję można podać jawnie:
+Wynik tej samodzielnej budowy: `dist/Floteka/Floteka.exe`. Pełny lokalny pakiet
+bez Office tworzy opisany wyżej `Buduj.bat`. Starszy skrypt
+`tools/build_release.ps1` buduje XLSM od podstaw z Excelem i pywin32 oraz
+uruchamia testy makr. Wersję można podać jawnie:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/build_exe.ps1 -Tag v1.0.0.0-dev
@@ -128,24 +184,13 @@ wybór gałęzi `dev` odbywa się w GitHub Actions.
 
 ## Który plik uruchomić
 
-<<<<<<< HEAD
 | Plik | Zastosowanie |
 | --- | --- |
 | `Floteka.xlsm` | Pusty skoroszyt do właściwej pracy w Excelu. |
 | `Floteka-DEMO.xlsm` | Oddzielny skoroszyt z fikcyjnymi przykładami. |
 | `Floteka.exe` | Samodzielna aplikacja Windows 64-bit z SQLite. Python nie jest potrzebny. |
 | `Uruchom-DEMO.bat` | Uruchamia EXE na osobnej przykładowej bazie `Floteka-DEMO.sqlite3`. |
-| `Zrodla.zip` | Kod aplikacji, VBA, testy i narzędzia budowy. |
-=======
-| Plik                        | Zastosowanie                                                              |
-| --------------------------- | ------------------------------------------------------------------------- |
-| `Floteka.xlsm`            | Pusty skoroszyt do właściwej pracy w Excelu.                            |
-| `Floteka-DEMO.xlsm`       | Oddzielny skoroszyt z fikcyjnymi przykładami.                            |
-| `Floteka-TWOJE-DANE.xlsm` | Poprawiona kopia dotychczasowych danych, jeśli dołączona do pakietu.   |
-| `Floteka.exe`             | Samodzielna aplikacja Windows 64-bit z SQLite. Python nie jest potrzebny. |
-| `Uruchom-DEMO.bat`        | Uruchamia EXE na osobnej przykładowej bazie `Floteka-DEMO.sqlite3`.    |
-| `Zrodla.zip`              | Kod aplikacji, VBA, testy i narzędzia budowy.                            |
->>>>>>> 97187ab0e2c734588af47313a1871edbf670bf46
+| `Zrodla.zip` | Kod aplikacji, VBA, testy, szablony i `Buduj.bat`. |
 
 Jeśli pobierasz pakiet ZIP, rozpakuj go do wybranego folderu. Skoroszyty i aplikacja
 nie synchronizują danych. Eksport aplikacji tworzy zwykły plik XLSX z danymi.
@@ -290,10 +335,10 @@ Test układu domyślnie sprawdza `dist/Floteka/Floteka.xlsm`, jeśli istnieje.
 Własny plik można wskazać zmienną
 `FLOTA_EXCEL_FILE`; używają jej również testy makr. Pomiar i testy filtrów:
 `python tools/check_excel_filters_speed.py dist/Floteka/Floteka.xlsm`.
-Budowa EXE i XLSM: `tools/build_release.ps1`; wymagane są PyInstaller,
-pywin32 i zainstalowany Excel dla Windows.
+Budowa EXE i XLSM bez Office: `Buduj.bat`. Budowa od podstaw i testowanie VBA:
+`tools/build_release.ps1`; wymaga dodatkowo pywin32 i Excela dla Windows.
 
-Budowa XLSM chwilowo włącza AccessVBOM w profilu użytkownika i przywraca
+Budowa XLSM od podstaw przez narzędzia COM chwilowo włącza AccessVBOM w profilu użytkownika i przywraca
 poprzednią wartość w bloku `finally`. Nie zmienia globalnego ustawienia
 zezwalającego na wykonywanie wszystkich makr. Ten krok jest potrzebny
 wyłącznie do ponownego zbudowania pliku ze źródeł.
