@@ -128,6 +128,7 @@ wybór gałęzi `dev` odbywa się w GitHub Actions.
 
 ## Który plik uruchomić
 
+<<<<<<< HEAD
 | Plik | Zastosowanie |
 | --- | --- |
 | `Floteka.xlsm` | Pusty skoroszyt do właściwej pracy w Excelu. |
@@ -135,6 +136,16 @@ wybór gałęzi `dev` odbywa się w GitHub Actions.
 | `Floteka.exe` | Samodzielna aplikacja Windows 64-bit z SQLite. Python nie jest potrzebny. |
 | `Uruchom-DEMO.bat` | Uruchamia EXE na osobnej przykładowej bazie `Floteka-DEMO.sqlite3`. |
 | `Zrodla.zip` | Kod aplikacji, VBA, testy i narzędzia budowy. |
+=======
+| Plik                        | Zastosowanie                                                              |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `Floteka.xlsm`            | Pusty skoroszyt do właściwej pracy w Excelu.                            |
+| `Floteka-DEMO.xlsm`       | Oddzielny skoroszyt z fikcyjnymi przykładami.                            |
+| `Floteka-TWOJE-DANE.xlsm` | Poprawiona kopia dotychczasowych danych, jeśli dołączona do pakietu.   |
+| `Floteka.exe`             | Samodzielna aplikacja Windows 64-bit z SQLite. Python nie jest potrzebny. |
+| `Uruchom-DEMO.bat`        | Uruchamia EXE na osobnej przykładowej bazie `Floteka-DEMO.sqlite3`.    |
+| `Zrodla.zip`              | Kod aplikacji, VBA, testy i narzędzia budowy.                            |
+>>>>>>> 97187ab0e2c734588af47313a1871edbf670bf46
 
 Jeśli pobierasz pakiet ZIP, rozpakuj go do wybranego folderu. Skoroszyty i aplikacja
 nie synchronizują danych. Eksport aplikacji tworzy zwykły plik XLSX z danymi.
