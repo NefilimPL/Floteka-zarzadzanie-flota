@@ -5,7 +5,6 @@ from pathlib import Path
 import argparse
 import json
 import os
-import subprocess
 import sys
 import winreg
 
@@ -164,7 +163,7 @@ def build(output=None, tag=None):
     if output is not None:
         OUT = Path(output).resolve()
     OUT.mkdir(parents=True, exist_ok=True)
-    release = prepare_version(ROOT, tag)
+    release = prepare_version(ROOT, tag, require_commit=os.environ.get('GITHUB_ACTIONS') == 'true')
     with vba_access():
         app = win32com.client.DispatchEx('Excel.Application')
         book = None
@@ -302,7 +301,7 @@ End Function''')
             print('XLSM demo: OK', flush=True)
             (ROOT / 'docs' / 'excel-build.json').write_text(json.dumps({'ok': True, 'excel': app.Version,
                 'version': release.version, 'tag': release.tag,
-                'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
+                'commit': release.commit,
                 'macro_lines': module.CodeModule.CountOfLines, 'files': [clean.name, 'Floteka-DEMO.xlsm'],
                 'AccessVBOM': 'przywracany w finally'}, ensure_ascii=False, indent=2), encoding='utf-8')
         finally:

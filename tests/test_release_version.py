@@ -87,3 +87,16 @@ def test_invalid_tag_leaves_prepared_version_untouched(source_copy):
     with pytest.raises(ValueError):
         prepare_version(source_copy, 'v1.2.3')
     assert (source_copy / 'fleet' / '_build_version.py').read_bytes() == previous
+
+
+def test_source_archive_build_does_not_require_git(source_copy, monkeypatch):
+    monkeypatch.setenv('PATH', '')
+    prepare_version(source_copy, 'v1.2.3.4')
+    metadata = json.loads((source_copy / 'build' / 'version.json').read_text(encoding='utf-8'))
+    assert metadata['commit'] is None
+
+
+def test_ci_build_requires_a_verified_source_commit(source_copy):
+    with pytest.raises(ValueError, match='commit'):
+        prepare_version(source_copy, 'v1.2.3.4', require_commit=True)
+    assert not (source_copy / 'fleet' / '_build_version.py').exists()

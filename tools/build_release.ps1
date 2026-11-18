@@ -17,7 +17,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Application tests failed.' }
 python tools/build_excel.py --output $flotaReleaseOutput @flotaVersionArgs
 if ($LASTEXITCODE -ne 0) { throw 'XLSM build failed.' }
 $env:FLOTA_EXCEL_FILE = Join-Path $flotaReleaseOutput 'Floteka.xlsm'
-python -m pytest tests/test_excel_layout.py -q -p no:cacheprovider
+$env:FLOTEKA_EXCEL_VERSION_DIR = $flotaReleaseOutput
+python -m pytest tests/test_excel_layout.py tests/test_excel_version.py -q -p no:cacheprovider
 if ($LASTEXITCODE -ne 0) { throw 'XLSM layout tests failed.' }
 python tools/test_excel.py
 if ($LASTEXITCODE -ne 0) { throw 'XLSM integration tests failed.' }

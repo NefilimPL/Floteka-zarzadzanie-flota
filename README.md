@@ -2,9 +2,9 @@
 
 **Kierowcy, tiry i przyczepy — terminy rozładunku i pełna historia.**
 
-Aktualne wydanie znajduje się w `dist/Floteka`. Wyniki budowania EXE/XLSM/ZIP
-są pomijane przez Git; repozytorium przechowuje źródła i narzędzia budowy.
-Starsze lokalne dostawy zachowano w `local-archive`, poza drzewem źródeł.
+Floteka udostępnia aplikację Windows z bazą SQLite oraz niezależny skoroszyt
+Excel z makrami. Gotowe pliki są publikowane w GitHub Releases. Lokalna budowa
+zapisuje je w `dist/Floteka`; repozytorium przechowuje źródła i narzędzia budowy.
 
 Kolory całych wierszy zależą od **daty rozładunku**: przed dzisiaj — czerwony,
 dziś lub jutro — pomarańczowy; późniejsze i puste daty mają zwykłe tło.
@@ -18,15 +18,14 @@ i przeliczania skoroszytu (w pozostawionym otwartym pliku można nacisnąć F9).
 wolne miejsce albo tworzy kolejne. Lista pokazuje tylko wpisy i szkice;
 wyczyszczenie usuwa wiersz z widoku i czyści formularz, zachowując historię.
 Przywracanie historii umożliwia wybranie
-**Nowego miejsca**, również gdy wszystkie wcześniejsze są zajęte. Dotychczasowa
-baza aktualizuje się automatycznie przy uruchomieniu, zachowując wpisy i historię.
-Po aktualizacji baza wymaga nowej wersji aplikacji. Excel zachowuje cztery miejsca.
+**Nowego miejsca**, również gdy wszystkie wcześniejsze są zajęte.
+Excel zachowuje cztery miejsca na kierowcę.
 
 **Tryb ciemny** przełącza kolory GUI i zachowuje wybór po ponownym uruchomieniu.
 Zmiana motywu nie kasuje niezapisanych danych. Czerwony i pomarańczowy terminów
 mają mocne wypełnienia w obu motywach oraz w skoroszycie i eksporcie.
 
-**Większa tabela wpisów:** wybór kierowcy i wyszukiwanie po nazwie lub tirze
+**Tabela wpisów:** wybór kierowcy i wyszukiwanie po nazwie lub tirze
 są nad tabelą. Tabela zajmuje całą szerokość zakładki. **+ Dodaj wpis**,
 **Edytuj wpis** albo dwuklik wiersza otwierają kompaktowy formularz pod tabelą.
 **Zwiń edytor** oddaje miejsce liście, zachowując wpisane, niezapisane dane.
@@ -89,8 +88,13 @@ Zadanie `excel` wymaga własnego runnera GitHub Actions z etykietami
 `self-hosted`, `Windows`, `X64`, `excel`. Na tym komputerze zainstaluj
 desktopowy Excel i PowerShell 7 (`pwsh`). Uruchom aktualnego runnera
 w zalogowanej sesji użytkownika, który może uruchamiać Excel, zamiast jako
-usługę bez pulpitu. Workflow instaluje Python i biblioteki, tworzy nowe, puste
+usługę bez pulpitu. Dla `actions/setup-python` zainstaluj też 7-Zip i dodaj
+`7z` do PATH. Jednorazowe przygotowanie instalacji Pythona w tool cache
+wymaga uprawnień administratora; zwykły runner powinien następnie działać
+bez podwyższonych uprawnień. Workflow instaluje Python i biblioteki, tworzy nowe, puste
 skoroszyty oraz DEMO i testuje makra na kopiach. Nie używa danych użytkownika.
+Przygotowanie interpretera opisuje też
+[dokumentacja setup-python dla własnych runnerów](https://github.com/actions/setup-python/blob/main/docs/advanced-usage.md#using-setup-python-with-a-self-hosted-runner).
 Bez tego runnera zadanie XLSM oczekuje w kolejce, a Release nie zostaje opublikowany.
 Dodanie runnera: **Settings → Actions → Runners → New self-hosted runner**;
 podczas konfiguracji dodaj etykietę `excel`.
@@ -122,44 +126,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/build_release.ps1 -Tag
 Lokalny parametr `-Tag` / `--tag` ustawia wersję aktualnego checkoutu;
 wybór gałęzi `dev` odbywa się w GitHub Actions.
 
-Domyślna baza znajduje się w `%LOCALAPPDATA%\Floteka\flota.sqlite3`.
-Przy pierwszym uruchomieniu nowej wersji istniejąca baza ze starego folderu
-`FlotaAdriana` jest kopiowana przez mechanizm kopii SQLite, również z danymi
-w dzienniku WAL. Nowa baza nigdy nie jest nadpisywana, a stary plik pozostaje
-kopią bezpieczeństwa. Własna ścieżka `--db` pomija tę migrację.
-
-Poprawiona wersja usuwa nakładanie przycisków na opis, przywraca nagłówki
-w odpowiednich kolumnach i naprawia dopisywanie historii przy aktywnych filtrach.
-Jeżeli otrzymałeś `Floteka-TWOJE-DANE.xlsm`, jest to poprawiona kopia
-dotychczasowego skoroszytu: dane, szkice i historia zostały porównane z oryginałem.
-Oryginał nie został zmieniony. Do dalszej pracy używaj poprawionej kopii.
-
-Filtry nie przenoszą wpisów do historii. Indeks duplikatów jest odtwarzany
-z rzeczywistych rekordów, również ukrytych i odfiltrowanych. Dopisywanie nie
-usuwa kryteriów filtra. Ochrona arkusza blokuje sortowanie, które zmieniłoby
-kolejność czterech miejsc; używaj filtrowania bez zdejmowania ochrony.
-
-Pomiar na tym komputerze: 250 kierowców, 1000 pełnych wpisów i 1000 kopii historii.
-Mediana zapisu niezmienionego pliku w aktualnej próbie wyniosła około 0,33 s.
-To wynik tej próby, nie gwarancja czasu dla dowolnej wielkości pliku i komputera.
-
-Dwa niezależne narzędzia do zarządzania kierowcami, tirami i przyczepami.
-Każdy kierowca ma jednego bieżącego tira. Excel ma **cztery miejsca na wpisy**,
-a aplikacja pokazuje tylko zajęte wpisy i pozwala dodawać następne bez stałego limitu.
-Kompletne wpisy są od razu kopiowane do historii, nawet gdy nadal są widoczne.
-
 ## Który plik uruchomić
 
 | Plik | Zastosowanie |
 | --- | --- |
 | `Floteka.xlsm` | Pusty skoroszyt do właściwej pracy w Excelu. |
 | `Floteka-DEMO.xlsm` | Oddzielny skoroszyt z fikcyjnymi przykładami. |
-| `Floteka-TWOJE-DANE.xlsm` | Poprawiona kopia dotychczasowych danych, jeśli dołączona do pakietu. |
 | `Floteka.exe` | Samodzielna aplikacja Windows 64-bit z SQLite. Python nie jest potrzebny. |
 | `Uruchom-DEMO.bat` | Uruchamia EXE na osobnej przykładowej bazie `Floteka-DEMO.sqlite3`. |
 | `Zrodla.zip` | Kod aplikacji, VBA, testy i narzędzia budowy. |
 
-Najpierw rozpakuj cały pakiet ZIP do wybranego folderu. Skoroszyty i aplikacja
+Jeśli pobierasz pakiet ZIP, rozpakuj go do wybranego folderu. Skoroszyty i aplikacja
 nie synchronizują danych. Eksport aplikacji tworzy zwykły plik XLSX z danymi.
 
 ## Zasady wspólne
@@ -177,10 +154,10 @@ nie synchronizują danych. Eksport aplikacji tworzy zwykły plik XLSX z danymi.
 - Przycisk **× / x** przy wierszu czyści tylko wskazane miejsce. Pozostałe
   miejsca nie przesuwają się. Kierowca i tir pozostają.
 - Historia nie jest usuwana przez te operacje. Poprawka kompletnego wpisu
-  dopisuje nową wersję. Identyczna zawartość sześciu pól dla tego samego
+  dopisuje nową wersję. Identyczne dane dla tego samego
   kierowcy nie jest dopisywana ponownie, także po przywróceniu do innego miejsca.
-- Jeżeli dwa rzeczywiście różne zlecenia mają identyczne dane, rozróżnij je
-  numerem zlecenia w „Informacjach dodatkowych”.
+- Jeżeli dwa różne zlecenia mają identyczne dane, rozróżnij je numerem
+  w opcjonalnym polu „Numer zlecenia”.
 - Przywracanie historii wymaga pustego miejsca lub utworzenia nowego w aplikacji. Przywrócone dane używają
   **obecnego tira** kierowcy. Przy zmianie tira pojawi się informacja;
   historyczny numer pozostaje w starej kopii.
@@ -216,6 +193,8 @@ przygotowane 5000 edytowalnych pozycji. DANE powiększa się przez dodawanie kie
 W ARCHIWUM używaj filtrów w nagłówkach. Aby przywrócić wpis, zaznacz jego wiersz,
 kliknij **Przywróć wpis** i podaj numer pustego miejsca od 1 do 4.
 W START jest przycisk **Kopia pliku**, zapisujący oddzielny XLSM.
+Filtry służą do przeglądania i nie przenoszą wpisów do historii.
+Używaj filtrowania bez zdejmowania ochrony arkusza i zmiany kolejności miejsc.
 
 Arkusze mają ochronę przed przypadkowymi zmianami układu i historii.
 Nie jest to zabezpieczenie przed celową ingerencją w plik. Kod VBA znajduje się
@@ -280,10 +259,6 @@ kierowców obejmują aktywnych; historia wszystkich obejmuje także wyłączonyc
 Eksport pojedynczego kierowcy może obejmować również kierowcę wyłączonego.
 
 Daty są datami Excela, a tekst pozostaje tekstem, także gdy zaczyna się od `=`.
-Wersja 1.1.2 naprawia konflikt filtrów arkusza i tabeli powodujący komunikat
-Excela o naprawianiu pliku. Eksporty utworzone wcześniejszą wersją wygeneruj
-ponownie z aplikacji. Test `tools/test_export_excel.py --exe dist/Floteka/Floteka.exe`
-otwiera XLSX z gotowego programu w rzeczywistym Excelu bez trybu naprawy.
 XLSX służy do przeglądania i dalszej analizy. Zmiana tego pliku nie aktualizuje
 bazy ani skoroszytu XLSM. Tekst przekraczający limit 32767 znaków komórki
 Excela zatrzymuje eksport z komunikatem; baza zachowuje pełną treść.
@@ -300,9 +275,8 @@ python main.py
 `Uruchom.bat` uruchamia tę samą wersję ze źródeł. Można użyć argumentu `--db`.
 Testy: `python -m pytest tests --capture=sys -q` (narzędzia z `requirements-build.txt`
 i dostęp do pulpitu dla testów Tk; `--capture=sys` omija konflikt uchwytów Tcl/Tk na Windows).
-Test układu domyślnie sprawdza `dist/Floteka/Floteka.xlsm`, jeśli istnieje,
-a dla starszych dostaw `dist/poprawione/Flota-Adriana.xlsm` lub
-`dist/Flota-Adriana.xlsm`. Własny plik można wskazać zmienną
+Test układu domyślnie sprawdza `dist/Floteka/Floteka.xlsm`, jeśli istnieje.
+Własny plik można wskazać zmienną
 `FLOTA_EXCEL_FILE`; używają jej również testy makr. Pomiar i testy filtrów:
 `python tools/check_excel_filters_speed.py dist/Floteka/Floteka.xlsm`.
 Budowa EXE i XLSM: `tools/build_release.ps1`; wymagane są PyInstaller,
@@ -315,4 +289,6 @@ wyłącznie do ponownego zbudowania pliku ze źródeł.
 
 Test EXE: `Floteka.exe --self-test raport.json` używa osobnej tymczasowej
 bazy. Testy Excela w `tools/test_excel*.py` pracują wyłącznie na kopiach w `build`.
-Wyniki wykonanych sprawdzeń znajdują się w dołączonym `WERYFIKACJA.md`.
+Procedura sprawdzania wydań znajduje się w [docs/verification.md](docs/verification.md),
+dołączanym do lokalnego pakietu jako `WERYFIKACJA.md`. Wyniki konkretnego wydania
+są zapisane w raportach dołączonych do artefaktów.

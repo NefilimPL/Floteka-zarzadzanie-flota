@@ -15,7 +15,7 @@ def visit(hwnd, _):
     if cls in ('#32770', 'NUIDialog'):
         print('DIALOG', title, flush=True)
         win32gui.EnumChildWindows(hwnd, lambda child, __: print(win32gui.GetDlgCtrlID(child), win32gui.GetClassName(child), win32gui.GetWindowText(child), flush=True), None)
-        if '--dismiss' in sys.argv and title == 'Flota Adriana':
+        if '--dismiss' in sys.argv and title == 'Floteka':
             def ok_button(child, __):
                 if win32gui.GetWindowText(child) == 'OK':
                     win32gui.PostMessage(child, win32con.BM_CLICK, 0, 0)

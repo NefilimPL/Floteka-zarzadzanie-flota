@@ -1,12 +1,13 @@
 """Prepare one embedded version for tagged EXE and Excel builds."""
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib.util import cache_from_source
 import json
 import os
 from pathlib import Path
 import re
+import subprocess
 
 from fleet.branding import DEFAULT_VERSION
 
@@ -18,6 +19,7 @@ class ReleaseVersion:
     prerelease: bool
     source_ref: str
     tag: str = ''
+    commit: str | None = None
 
 
 def parse_tag(tag: str) -> ReleaseVersion:
@@ -32,13 +34,23 @@ def parse_tag(tag: str) -> ReleaseVersion:
                           'dev' if dev else 'refs/tags/' + tag, tag)
 
 
-def prepare_version(root: Path, tag: str | None = None) -> ReleaseVersion:
+def prepare_version(root: Path, tag: str | None = None, *, require_commit=False) -> ReleaseVersion:
     if tag:
         release = parse_tag(tag)
     else:
         numbers = tuple(int(value) for value in DEFAULT_VERSION.split('.'))
         release = ReleaseVersion(DEFAULT_VERSION, numbers + (0,) * (4 - len(numbers)), False, '')
     root = Path(root)
+    commit = None
+    if (root / '.git').exists():
+        try:
+            commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root,
+                                             text=True, stderr=subprocess.DEVNULL).strip()
+        except (OSError, subprocess.CalledProcessError):
+            pass
+    if require_commit and (commit is None or re.fullmatch(r'[0-9a-f]{40,64}', commit) is None):
+        raise ValueError('A verified source commit is required for a CI build.')
+    release = replace(release, commit=commit)
     build = root / 'build'
     build.mkdir(parents=True, exist_ok=True)
     module = root / 'fleet' / '_build_version.py'
@@ -69,7 +81,7 @@ def main():
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--github-output', type=Path)
     args = parser.parse_args()
-    release = prepare_version(args.root, args.tag)
+    release = prepare_version(args.root, args.tag, require_commit=os.environ.get('GITHUB_ACTIONS') == 'true')
     if args.github_output:
         with args.github_output.open('a', encoding='utf-8') as output:
             output.write(f'version={release.version}\nprerelease={str(release.prerelease).lower()}\ntag={release.tag}\n')
